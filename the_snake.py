@@ -173,8 +173,6 @@ class Snake(GameObject):
         for position in self.positions:
             self.draw_cell(position, self.body_color)
 
-        # self.draw_cell(self.get_head_position(), self.body_color)
-
         if self.last:
             self.draw_cell(self.last, BOARD_BACKGROUND_COLOR)
 
@@ -185,7 +183,6 @@ class Snake(GameObject):
     def reset(self):
         """Сбрасывает состояние змейки к начальному."""
         self.length = 1
-        # self.position = SCREEN_CENTER
         self.positions = [SCREEN_CENTER]
         self.direction = RIGHT
         self.last = None
