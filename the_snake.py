@@ -1,4 +1,4 @@
-from random import randint
+from random import choice
 
 import pygame as pg
 
@@ -8,7 +8,7 @@ GRID_SIZE = 20
 GRID_WIDTH = SCREEN_WIDTH // GRID_SIZE
 GRID_HEIGHT = SCREEN_HEIGHT // GRID_SIZE
 
-# Центр экрана
+# Центр экрана:
 SCREEN_CENTER = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
 
 # Направления движения:
@@ -25,7 +25,10 @@ SNAKE_COLOR = (0, 255, 0)
 # Скорость движения змейки:
 SPEED = 20
 
+# Словарь обратных направлений:
+# (текущее_направление, нажатая_клавиша) -> новое_направление:
 REVERSE_DIRECTIONS = {
+    # --- СТРЕЛКИ ---
     (LEFT, pg.K_UP): UP,
     (RIGHT, pg.K_UP): UP,
     (LEFT, pg.K_DOWN): DOWN,
@@ -34,13 +37,31 @@ REVERSE_DIRECTIONS = {
     (DOWN, pg.K_LEFT): LEFT,
     (UP, pg.K_RIGHT): RIGHT,
     (DOWN, pg.K_RIGHT): RIGHT,
+
+    # --- WASD (для левшей) ---
+    (LEFT, pg.K_w): UP,
+    (RIGHT, pg.K_w): UP,
+    (LEFT, pg.K_s): DOWN,
+    (RIGHT, pg.K_s): DOWN,
+    (UP, pg.K_a): LEFT,
+    (DOWN, pg.K_a): LEFT,
+    (UP, pg.K_d): RIGHT,
+    (DOWN, pg.K_d): RIGHT,
 }
+
+# Множество всех ячеек доски:
+ALL_CELLS = set(
+    (x * GRID_SIZE, y * GRID_SIZE)
+    for x in range(GRID_WIDTH)
+    for y in range(GRID_HEIGHT)
+)
 
 # Настройка игрового окна:
 screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), 0, 32)
 
 # Заголовок окна игрового поля:
-pg.display.set_caption('Змейка. Для выхода из игры нажмите ESC')
+pg.display.set_caption(
+    'Змейка. Управление: Стрелки или WASD. Для выхода нажмите ESC')
 
 # Настройка времени:
 clock = pg.time.Clock()
@@ -96,28 +117,14 @@ class Apple(GameObject):
     на игровом поле.
     """
 
-    def __init__(self, busy_cells=()):
-        """Создаёт экземпляр яблока.
-
-        Args:
-            busy_cells (tuple[int, int]): Набор занятых ячеек.
-            body_color (tuple[int, int, int]): Цвет яблока.
-        """
-        super().__init__(body_color=APPLE_COLOR)
+    def __init__(self, busy_cells=(), color=APPLE_COLOR):
+        """Создаёт экземпляр яблока."""
+        super().__init__(body_color=color)
         self.randomize_position(busy_cells)
 
     def randomize_position(self, busy_cells):
-        """Устанавливает случайное положение яблока на игровом поле.
-
-        Позиция выбирается строго по сетке, чтобы совпадать с ячейками поля.
-        """
-        while True:
-            self.position = (
-                randint(0, GRID_WIDTH - 1) * GRID_SIZE,
-                randint(0, GRID_HEIGHT - 1) * GRID_SIZE,
-            )
-            if self.position not in busy_cells:
-                break
+        """Устанавливает случайное положение яблока на игровом поле."""
+        self.position = choice(tuple(ALL_CELLS - set(busy_cells)))
 
     def draw(self):
         """Отрисовывает яблоко на игровой поверхности."""
@@ -131,22 +138,14 @@ class Snake(GameObject):
     Поддерживает запрет разворота на 180 градусов и циклические границы поля.
     """
 
-    def __init__(self):
-        """Инициализирует змейку.
-
-        Args:
-            body_color (tuple[int, int, int]): Цвет змейки.
-        """
-        super().__init__(body_color=SNAKE_COLOR)
+    def __init__(self, color=SNAKE_COLOR):
+        """Инициализирует змейку."""
+        super().__init__(body_color=color)
 
         self.reset()
 
     def update_direction(self, new_direction):
-        """Обновляет направление движения змейки после обработки ввода.
-
-        Применяет сохранённое в `new_direction` направление, если оно есть.
-        Это предотвращает «перескакивание» направления при быстрых нажатиях.
-        """
+        """Обновляет направление движения змейки после обработки ввода."""
         self.direction = new_direction
 
     def move(self):
@@ -154,14 +153,18 @@ class Snake(GameObject):
         head_x, head_y = self.get_head_position()
         dx, dy = self.direction
 
-        new_head = (
-            (head_x + dx * GRID_SIZE) % SCREEN_WIDTH,
-            (head_y + dy * GRID_SIZE) % SCREEN_HEIGHT,
+        self.positions.insert(
+            0,
+            (
+                (head_x + dx * GRID_SIZE) % SCREEN_WIDTH,
+                (head_y + dy * GRID_SIZE) % SCREEN_HEIGHT,
+            )
         )
-        self.positions.insert(0, new_head)
 
         if len(self.positions) > self.length:
             self.last = self.positions.pop()
+        else:
+            self.last = None
 
     def draw(self):
         """Отрисовывает змейку на игровой поверхности."""
@@ -185,28 +188,22 @@ class Snake(GameObject):
 def handle_keys(snake):
     """Обрабатывает события ввода (нажатия клавиш) и закрытие окна."""
     for event in pg.event.get():
-        if event.type == pg.QUIT:
+        if event.type == pg.QUIT or (
+                event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE):
             pg.quit()
             raise SystemExit
 
         if event.type == pg.KEYDOWN:
-            if event.key == pg.K_ESCAPE:
-                pg.quit()
-                raise SystemExit
-
-            new_direction = REVERSE_DIRECTIONS.get(
-                (snake.direction, event.key),
-                snake.direction,
+            snake.update_direction(
+                REVERSE_DIRECTIONS.get(
+                    (snake.direction, event.key),
+                    snake.direction,
+                )
             )
-            snake.update_direction(new_direction)
 
 
 def main():
-    """Основная функция игры.
-
-    Инициализирует PyGame, создаёт экземпляры яблока и змейки,
-    запускает игровой цикл: обработка ввода, обновление логики, отрисовка.
-    """
+    """Основная функция игры."""
     pg.display.init()
     snake = Snake()
     apple = Apple(busy_cells=snake.position)
